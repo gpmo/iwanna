@@ -14,14 +14,16 @@ import {
   LoginButton,
 } from 'react-native-fbsdk';
 
+import Realm from 'realm';
+
 export default class iwanna extends Component {
-  navigatorRenderScene(route, navigator) {
+  navigatorRenderScene = (route, navigator) => {
     switch (route.id) {
       case 'loginView':
         return (<LoginView navigator={navigator} title="loginView"/>);
-      case 'listView':
-        return (<ListView navigator={navigator} title="listView"
-          data={route.accessToken}/>);
+      case 'iwannaListView':
+        return (<IwannaListView navigator={navigator} title="iwannaListView"
+          data={route.accessToken} user={route.user} fbUserData={route.fbUserData}/>);
     }
   };
 
@@ -36,12 +38,39 @@ export default class iwanna extends Component {
 };
 
 class LoginView extends Component {
-  navListView(accessToken) {
+  navIwannaListView = (accessToken, user, fbUserData) => {
     this.props.navigator.push({
-      id: 'listView',
-      accessToken
+      id: 'iwannaListView',
+      accessToken,
+      user,
+      fbUserData
     });
   };
+
+  fetchFbUserDataAndNavToListView = (data, user) => {
+    const responseInfoCallback = (error, result) => {
+      if (error) {
+        console.log(error)
+        alert('Error fetching data: ' + error.toString());
+      } else {
+        console.log("This is the result" + JSON.stringify(result));
+        this.navIwannaListView(data, user, result);
+      }
+    };
+
+    const infoRequest = new GraphRequest(
+      '/me/friends?fields=email,name,first_name,middle_name,last_name&debug=all',
+      {
+        accessToken: data,
+      },
+      responseInfoCallback
+    );
+
+    // Start the graph request.
+    const fbUserData = new GraphRequestManager()
+      .addRequest(infoRequest).start();
+
+  }
 
   render() {
     return (
@@ -58,41 +87,42 @@ class LoginView extends Component {
                 const data = await AccessToken.getCurrentAccessToken();
                 const accessToken = data.accessToken;
 
-                this.navListView(accessToken);
-                // const responseInfoCallback = (error, result) => {
-                //   if (error) {
-                //     console.log(error)
-                //     alert('Error fetching data: ' + error.toString());
-                //   } else {
-                //     console.log("This is the result" + JSON.stringify(result));
-                //     alert('Success fetching data: ' + result.data[0]);
-                //   }
-                // };
-                //
-                // const infoRequest = new GraphRequest(
-                //   '/me/friends?fields=email,name,first_name,middle_name,last_name&debug=all',
-                //   {
-                //     accessToken: accessToken,
-                //   },
-                //   responseInfoCallback
-                // );
-                //
-                // // Start the graph request.
-                // new GraphRequestManager().addRequest(infoRequest).start();
+                // login user into realm to be able to access remote database
+                const user = Realm.Sync.User.registerWithProvider(
+                  'http://34.200.226.165:9080',
+                  'facebook',
+                  accessToken.toString(),
+                  (error, user) => {
+                    if (!error) {
+                      this.fetchFbUserDataAndNavToListView(accessToken, user);
+                    } else {
+                      alert("Could not login user into realm. Error " +
+                        JSON.stringify(error));
+                    }
+                  }
+                );
               };
             }
           }
-          onLogoutFinished={() => alert("logout.")}/>
+        />
       </View>
     );
   };
 };
 
-class ListView extends Component {
+const PersonSchema = {
+  name: 'Person',
+  properties: {
+    name:     'string',
+    username: 'date',
+  }
+};
+
+class IwannaListView extends Component {
   render() {
     const { data } = this.props;
     return(
-      <Text>Hello {data}!</Text>
+      <Text>Hello {JSON.stringify(data)}!</Text>
     );
   };
 }
